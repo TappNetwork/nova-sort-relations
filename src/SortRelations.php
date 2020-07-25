@@ -43,11 +43,13 @@ trait SortRelations
 
         if (is_string($sortRelations[$column])) {
             $qualified = $related->qualifyColumn($sortRelations[$column]);
+            $query->orderByRaw($qualified . ' IS NULL');
             $query->orderBy($qualified, $direction);
         }
 
         if (is_array($sortRelations[$column])) {
             foreach ($sortRelations[$column] as $orderColumn) {
+                $query->orderByRaw($related->qualifyColumn($orderColumn) . ' IS NULL');
                 $query->orderBy($related->qualifyColumn($orderColumn), $direction);
             }
         }
