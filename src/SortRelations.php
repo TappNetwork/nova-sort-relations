@@ -21,6 +21,16 @@ trait SortRelations
     }
 
     /**
+     * Get the sortable custom columns for the resource.
+     *
+     * @return array
+     */
+    public static function sortableRelationCustomColumns(): array
+    {
+        return static::$sortRelationCustomColumns ?? [];
+    }
+
+    /**
      * Apply any applicable orderings to the query.
      *
      * @param  string $column
@@ -31,12 +41,17 @@ trait SortRelations
     protected static function applyRelationOrderings(string $column, string $direction, $query)
     {
         $sortRelations = static::sortableRelations();
+        $sortRelationCustomColumns = static::sortableRelationCustomColumns();
 
         $model = $query->getModel();
         $relation = $column;
         $related = $model->{$column}()->getRelated();
-
-        $foreignKey = Str::snake($relation) . '_' . $related->getKeyName();
+        
+        if (isset($sortRelationCustomColumns[$column])) {
+            $foreignKey = $sortRelationCustomColumns[$column];
+        } else {
+            $foreignKey = Str::snake($relation) . '_' . $related->getKeyName();
+        }
 
         $query->select($model->getTable() . '.*');
         $query->leftJoin($related->getTable(), $model->qualifyColumn($foreignKey), '=', $related->qualifyColumn($related->getKeyName()));
@@ -73,17 +88,32 @@ trait SortRelations
         }
 
         $sortRelations = static::sortableRelations();
+        $sortRelationCustomColumns = static::sortableRelationCustomColumns();
 
         foreach ($orderings as $column => $direction) {
             if (empty($direction)) {
                 $direction = 'asc';
             }
 
-            if (Str::endsWith($column, '_id')) {
+            $sortColumn = $column;
+
+            $customRelation = array_search($column, $sortRelationCustomColumns);
+            
+            if (! $customRelation && Str::endsWith($column, '_id')) {
                 $column = Str::before($column, '_id');
             }
 
-            if (array_key_exists(Str::camel($column), $sortRelations)) {
+            /*
+             * When column name ends with _id and it's not a relationship column
+             * Use original name which ends with _id.
+             */
+            if (! array_key_exists(Str::camel($column), $sortRelations)) {
+                $column = $sortColumn;
+            }
+
+            if ($customRelation) {
+                $query = self::applyRelationOrderings($customRelation, $direction, $query);
+            } elseif (array_key_exists(Str::camel($column), $sortRelations)) {
                 $query = self::applyRelationOrderings(Str::camel($column), $direction, $query);
             } else {
                 $query->orderBy($column, $direction);
